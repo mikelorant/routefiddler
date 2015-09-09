@@ -27,13 +27,14 @@ Gem::Specification.new do |spec|
   spec.executables   = spec.files.grep(%r{^exe/}) { |f| File.basename(f) }
   spec.require_paths = ['lib']
 
-  spec.add_runtime_dependency 'aws-sdk'
-  spec.add_runtime_dependency 'thor'
-  spec.add_runtime_dependency 'require_all'
+  spec.add_runtime_dependency 'aws-sdk', '~> 2.1'
+  spec.add_runtime_dependency 'thor', '~> 0.19'
+  spec.add_runtime_dependency 'require_all', '~> 1.3'
+  spec.add_runtime_dependency 'httparty', '~> 0.13'
 
   spec.add_development_dependency 'bundler', '~> 1.10'
   spec.add_development_dependency 'rake', '~> 10.0'
-  spec.add_development_dependency 'pry'
-  spec.add_development_dependency 'gemfury'
-  spec.add_development_dependency 'rubocop'
+  spec.add_development_dependency 'pry', '~> 0.10'
+  spec.add_development_dependency 'gemfury', '~> 0.6'
+  spec.add_development_dependency 'rubocop', '~> 0.34'
 end
