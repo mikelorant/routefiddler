@@ -1,54 +1,52 @@
 require 'aws-sdk'
 require 'httparty'
+require 'memoist'
 
 module Routefiddler
   # Routefiddler::Route
-  class Route
+  class Core
+    extend Memoist
+
     INSTANCE_ID = 'http://169.254.169.254/latest/meta-data/instance-id'
     DEFAULT_CIDR_BLOCK = '0.0.0.0/0'
     ROUTE_TABLE_FILTER_KEY = 'aws:cloudformation:logical-id'
     ROUTE_TABLE_FILTER_VALUE = /^Private.RouteTable/
 
+    attr_reader :options
+
     def initialize(options = {})
       Routefiddler::Config.new.setup(options)
       @cloudformation = Aws::CloudFormation::Client.new
       @ec2 = Aws::EC2::Client.new
-    end
 
-    def update(options = {})
-      instance_id = query(INSTANCE_ID) || 'i-e3b0393d'
+      Routefiddler::Config.new.setup(options, 'peer')
+      @ec2_peer =  Aws::EC2::Client.new
 
-      vpc_id = vpc_id instance_id
-      routes = routes vpc_id
-      route_tables = route_tables routes
-      filtered_route_tables = filtered_route_tables route_tables
-
-      filtered_route_tables.each do |route_table|
-        @ec2.create_route(
-          route_table_id: route_table,
-          destination_cidr_block: DEFAULT_CIDR_BLOCK,
-          instance_id: instance_id
-        )
-      end
-
-      show_route_tables filtered_route_tables
+      @options = options
     end
 
     private
 
-    def vpc_id(instance_id)
+    def instance_id
+      options[:instance_id] || query(INSTANCE_ID)
+    end
+    memoize :instance_id
+
+    def vpc_id
       @ec2.describe_instances(instance_ids: [instance_id]).reservations.first.instances.first.vpc_id
     end
+    memoize :vpc_id
 
-    def routes(vpc_id)
+    def routes
       filter_vpc_id(@ec2.describe_route_tables.route_tables, vpc_id)
     end
+    memoize :routes
 
     def filter_vpc_id(route_tables, vpc_id)
       route_tables.select { |rt| rt.vpc_id == vpc_id }
     end
 
-    def route_tables(routes)
+    def route_tables
       rt = routes.select do |route|
         route.tags.any? do |t|
           t.key == ROUTE_TABLE_FILTER_KEY && t.value =~ ROUTE_TABLE_FILTER_VALUE
@@ -57,11 +55,25 @@ module Routefiddler
 
       rt.map(&:route_table_id)
     end
+    memoize :route_tables
 
-    def filtered_route_tables(route_tables)
-      rt = @ec2.describe_route_tables(route_table_ids: route_tables).route_tables
+    def find_subnets(route_tables)
+      find_route_tables(route_tables).map(&:associations).flatten.map(&:subnet_id)
+    end
+
+    def find_route_tables(route_tables)
+      @ec2.describe_route_tables(route_table_ids: route_tables).route_tables
+    end
+
+    def find_cidr(subnets)
+      @ec2.describe_subnets(subnet_ids: subnets).subnets.map(&:cidr_block)
+    end
+
+    def filtered_route_tables
+      rt = find_route_tables route_tables
       missing_default_route(rt).map(&:route_table_id)
     end
+    memoize :filtered_route_tables
 
     def missing_default_route(route_tables)
       route_tables.reject do |rt|
@@ -69,14 +81,6 @@ module Routefiddler
           r.destination_cidr_block == DEFAULT_CIDR_BLOCK && !r.instance_id.nil?
         end
       end
-    end
-
-    def show_route_tables(route_tables)
-      puts 'Updated the following route tables:'
-      route_tables.each do |rt|
-        puts "  #{rt}"
-      end
-      puts
     end
 
     def query(url)

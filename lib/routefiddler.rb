@@ -17,6 +17,6 @@ module Routefiddler
   def self.update
     self.options ||= {}
 
-    Routefiddler::Route.new(self.options).update(self.options)
+    Routefiddler::Route::Update.new(self.options).update
   end
 end
