@@ -30,18 +30,18 @@ module Routefiddler
       end
 
       def tag_vpc_peering_connections
-        create_tags(@vpc_peering_connection.vpc_peering_connection_id, options[:description])
-        create_tags(@vpc_accept_peering_connection.vpc_peering_connection_id, switch(options[:description]))
+        create_tags(@ec2, @vpc_peering_connection.vpc_peering_connection_id, options[:description])
+        create_tags(@ec2_peer, @vpc_accept_peering_connection.vpc_peering_connection_id, switch(options[:description]))
       end
 
-      def create_tags(vpc_peering_connection_id, name=nil)
-        tags = @tags
+      def create_tags(resource, vpc_peering_connection_id, name=nil)
+        tags = @tags.clone
         tags.push(
           key: 'Name',
           value: name
         ) if name
 
-        @ec2.create_tags(
+        resource.create_tags(
           resources: [vpc_peering_connection_id],
           tags: tags
         )
